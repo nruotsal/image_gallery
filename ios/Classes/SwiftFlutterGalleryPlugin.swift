@@ -43,23 +43,37 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
     }
 
     func getPhotoPaths(startDate: Date, endDate: Date) {
+        let group = DispatchGroup()
+        group.enter()
+
         DispatchQueue.main.async {
             let assets = self.fetchPhotos()
-            assets.enumerateObjects({
-                (asset, index, stop) in
+            if (assets.count == 0) {
+                group.leave()
+            } else {
+                assets.enumerateObjects({
+                    (asset, index, stop) in
                     if (asset.creationDate! < startDate) {
-                        stop.pointee = false
+                        group.leave()
+                        stop.pointee = true
                     }
 
                     if (asset.creationDate! >= startDate && asset.creationDate! <= endDate) {
+                        group.enter()
                         self.getPhotoPath(
                             asset: asset,
                             callback: {
-                                (path) in self.onPathResolved(path: path)
-                            }
+                                (path) in
+                                self.onPathResolved(path: path)
+                                group.leave()
+                        }
                         )
                     }
-            })
+                })
+            }
+        }
+
+        group.notify(queue: .main) {
             self.closeSink()
         }
     }
