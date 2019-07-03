@@ -85,26 +85,34 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
     }
 
     func getPhotoPath(asset: PHAsset, callback: @escaping (String)->()) {
+        /*
         let imageManager = PHImageManager.default()
         let options = PHImageRequestOptions()
 
-        options.deliveryMode = PHImageRequestOptionsDeliveryMode.fastFormat
-        options.resizeMode = PHImageRequestOptionsResizeMode.exact
+        options.deliveryMode = .fastFormat
+        options.resizeMode = .exact
+        options.version = .original
 
         imageManager.requestImage(
             for: asset,
             targetSize: CGSize(width: 512, height: 512),
-            contentMode: PHImageContentMode.aspectFit,
+            contentMode: .aspectFit,
             options: options,
             resultHandler: {
                 (image, info) in
                 callback(self.storeThumbnail(image: image))
             }
         )
+        */
+        let options = PHContentEditingInputRequestOptions()
+        asset.requestContentEditingInput(with: options, completionHandler: {
+            (contentEditingInput, _) in
+            callback(contentEditingInput!.fullSizeImageURL!.absoluteString)
+        })
     }
 
     func storeThumbnail(image: UIImage?) -> String {
-        let fileName = String(format: "image_picker_%@.jpg", ProcessInfo.processInfo.globallyUniqueString)
+        let fileName = String(format: "%@.jpg", ProcessInfo.processInfo.globallyUniqueString)
         let filePath = NSString.path(withComponents: [NSTemporaryDirectory(), fileName])
 
         FileManager.default.createFile(
