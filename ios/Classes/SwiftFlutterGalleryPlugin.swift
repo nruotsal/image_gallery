@@ -26,12 +26,12 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         return nil
     }
 
-    public func onPathResolved(path: String) {
+    public func onPhotoData(photoData: [String: Any?]) {
         guard let eventSink = eventSink else {
             return
         }
 
-        eventSink(path)
+        eventSink(photoData)
     }
 
     public func closeSink() {
@@ -60,11 +60,11 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
 
                     if (asset.creationDate! >= startDate && asset.creationDate! <= endDate) {
                         group.enter()
-                        self.getPhotoPath(
+                        self.getPhotoData(
                             asset: asset,
                             callback: {
-                                (path) in
-                                self.onPathResolved(path: path)
+                                (photoData) in
+                                self.onPhotoData(photoData: photoData)
                                 group.leave()
                         }
                         )
@@ -84,27 +84,42 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         return PHAsset.fetchAssets(with: PHAssetMediaType.image, options: options)
     }
 
-    func getPhotoPath(asset: PHAsset, callback: @escaping (String)->()) {
+    func getPhotoData(asset: PHAsset, callback: @escaping ([String: Any?])->()) {
         let imageManager = PHImageManager.default()
         let options = PHImageRequestOptions()
 
-        options.deliveryMode = PHImageRequestOptionsDeliveryMode.fastFormat
-        options.resizeMode = PHImageRequestOptionsResizeMode.exact
+        options.deliveryMode = .fastFormat
+        options.resizeMode = .exact
+        options.version = .original
 
         imageManager.requestImage(
             for: asset,
             targetSize: CGSize(width: 512, height: 512),
-            contentMode: PHImageContentMode.aspectFit,
+            contentMode: .aspectFit,
             options: options,
             resultHandler: {
-                (image, info) in
-                callback(self.storeThumbnail(image: image))
+                (image, _) in
+                let thumbPath = self.storeThumbnail(image: image);
+                imageManager.requestImageData(
+                    for: asset,
+                    options: options,
+                    resultHandler: {
+                        (imageData, _, _, _) in
+                        guard let data = imageData else {
+                            callback(["path": thumbPath, "metadata": nil])
+                            return
+                        }
+
+                        let metadata = self.fetchPhotoMetadata(data: data)
+                        callback(["path": thumbPath, "metadata": metadata])
+                    }
+                )
             }
         )
     }
 
     func storeThumbnail(image: UIImage?) -> String {
-        let fileName = String(format: "image_picker_%@.jpg", ProcessInfo.processInfo.globallyUniqueString)
+        let fileName = String(format: "%@.jpg", ProcessInfo.processInfo.globallyUniqueString)
         let filePath = NSString.path(withComponents: [NSTemporaryDirectory(), fileName])
 
         FileManager.default.createFile(
@@ -114,5 +129,14 @@ public class SwiftFlutterGalleryPlugin: NSObject, FlutterPlugin, FlutterStreamHa
         )
 
         return filePath
+    }
+
+    func fetchPhotoMetadata(data: Data) -> [String: Any]? {
+        guard let selectedImageSourceRef = CGImageSourceCreateWithData(data as CFData, nil),
+            let imagePropertiesDictionary = CGImageSourceCopyPropertiesAtIndex(selectedImageSourceRef, 0, nil) as? [String: Any] else {
+                return nil
+        }
+
+        return imagePropertiesDictionary
     }
 }
